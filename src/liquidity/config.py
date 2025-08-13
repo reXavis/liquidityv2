@@ -57,7 +57,7 @@ def load_config() -> AppConfig:
     min_ticks = 50
     max_ticks = 2000
     alpha = 0.6
-    model_pools_whitelist: List[str] = []  # add pool IDs here to restrict the model runner
+    model_pools_whitelist: List[str] = ['0xd391259888fe4599e8011eea5e27b93a9dc74920']  # add pool IDs here to restrict the model runner
 
     os.makedirs(data_dir, exist_ok=True)
 

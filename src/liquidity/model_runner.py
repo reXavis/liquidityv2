@@ -14,6 +14,7 @@ import pandas as pd
 from .config import load_config
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+# These will be set in main() from cfg.data_dir to ensure alignment with the ingestor
 DATA_DIR = os.path.join(BASE_DIR, "data", "json")
 MODEL_DIR = os.path.join(DATA_DIR, "model")
 
@@ -204,7 +205,11 @@ def run_once_for_pool(pool_id: str, cfg) -> None:
 	latest = load_latest_json(pool_id) or {}
 	current_tick = latest.get("current_tick")
 	if current_tick is None:
-		print(f"[{pool_id}] No current_tick in latest.json; skipping")
+		fp = os.path.join(DATA_DIR, pool_id, "latest.json")
+		if not os.path.exists(fp):
+			print(f"[{pool_id}] latest.json not found at {fp}; skipping")
+		else:
+			print(f"[{pool_id}] No current_tick in latest.json; skipping")
 		return
 	current_tick = int(current_tick)
 	# decimals: attempt to read from latest.json schema variants
@@ -275,8 +280,12 @@ def run_once_for_pool(pool_id: str, cfg) -> None:
 
 def main():
 	cfg = load_config()
+	# Align IO paths with ingestor-configured data_dir
+	global DATA_DIR, MODEL_DIR
+	DATA_DIR = cfg.data_dir
+	MODEL_DIR = os.path.join(DATA_DIR, "model")
 	os.makedirs(MODEL_DIR, exist_ok=True)
-	print("Starting model runner (every 2 hours)")
+	print(f"Starting model runner (every 2 hours); data_dir={DATA_DIR} model_dir={MODEL_DIR}")
 	last_saved_at: Dict[str, float] = {}
 	run = True
 
