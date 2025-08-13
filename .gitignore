@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+
+# Data outputs
+/data/
+/data/json/
+/data/json/model/
+
+# Streamlit cache
+.streamlit/
+.cache/ 
