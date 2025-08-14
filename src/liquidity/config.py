@@ -24,6 +24,7 @@ class AppConfig:
     rpc_url: str
     position_manager_address: str
     position_manager_abi_path: str
+    playerliquidity: float
 
 
 def _get_env_int(name: str, default: int) -> int:
@@ -66,9 +67,10 @@ def load_config() -> AppConfig:
 
     # Chain / contract config
     chain_name = "HyperEVM"
-    rpc_url = os.getenv("RPC_URL", "")
+    rpc_url = "https://hyperliquid.drpc.org"
     position_manager_address = "0x69D57B9D705eaD73a5d2f2476C30c55bD755cc2F"
     position_manager_abi_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "abi", "position_manager.json"))
+    playerliquidity = 0.0
 
     os.makedirs(data_dir, exist_ok=True)
 
@@ -90,4 +92,5 @@ def load_config() -> AppConfig:
         rpc_url=rpc_url,
         position_manager_address=position_manager_address,
         position_manager_abi_path=position_manager_abi_path,
+        playerliquidity=playerliquidity,
     ) 
