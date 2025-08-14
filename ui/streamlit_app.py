@@ -913,6 +913,69 @@ def compute_model_historical_bands(
     return full[["snapped_at", "mean", "upper", "lower"]], props_df
 
 
+def _parse_any_timestamp(v: Any) -> datetime | None:
+    try:
+        if isinstance(v, str) and v:
+            return datetime.fromisoformat(v.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    return None
+
+
+def load_external_testmodel_bands(pool_id: str, df_series: pd.DataFrame, d0: int, d1: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    base_dir = os.path.join(DATA_DIR, "testmodel", pool_id)
+    if not os.path.isdir(base_dir):
+        return pd.DataFrame(columns=["snapped_at", "mean", "upper", "lower"]), pd.DataFrame(columns=[])
+    rows: list[dict] = []
+    props: list[dict] = []
+    scale10 = float(10 ** (int(d0) - int(d1)))
+    display_scale = 10e11
+    for name in sorted(os.listdir(base_dir)):
+        if not name.endswith(".json"):
+            continue
+        fp = os.path.join(base_dir, name)
+        try:
+            with open(fp, "r") as f:
+                data = json.load(f)
+            ts = _parse_any_timestamp(data.get("snapped_at") or data.get("timestamp") or data.get("time"))
+            if ts is None:
+                continue
+            lower_p = data.get("lower_price")
+            upper_p = data.get("upper_price")
+            mean_p = data.get("center_price") or data.get("mean_price")
+            if lower_p is None or upper_p is None:
+                # Try ticks + decimals
+                lt = data.get("lower_tick")
+                ut = data.get("upper_tick")
+                ct = data.get("center_tick")
+                if lt is None or ut is None:
+                    continue
+                lower_p = float((1.0001 ** float(int(lt))) * scale10)
+                upper_p = float((1.0001 ** float(int(ut))) * scale10)
+                if mean_p is None:
+                    if ct is not None:
+                        mean_p = float((1.0001 ** float(int(ct))) * scale10)
+                    else:
+                        mean_p = (float(lower_p) + float(upper_p)) / 2.0
+            props.append({
+                "snapped_at": ts,
+                "lower": float(lower_p) * display_scale,
+                "upper": float(upper_p) * display_scale,
+                "mean": float(mean_p if mean_p is not None else ((float(lower_p) + float(upper_p)) / 2.0)) * display_scale,
+            })
+        except Exception:
+            continue
+    if not props:
+        return pd.DataFrame(columns=["snapped_at", "mean", "upper", "lower"]), pd.DataFrame(columns=[])
+    props_df = pd.DataFrame(props).sort_values("snapped_at").reset_index(drop=True)
+    # Map proposals to piecewise-constant bands over our price series timeline
+    if df_series.empty or "snapped_at" not in df_series.columns:
+        return props_df[["snapped_at", "mean", "upper", "lower"]], props_df
+    base_times = df_series.dropna(subset=["snapped_at"]).sort_values("snapped_at")[["snapped_at"]].reset_index(drop=True)
+    full = pd.merge_asof(base_times, props_df, on="snapped_at", direction="backward")
+    return full[["snapped_at", "mean", "upper", "lower"]], props_df
+
+
 @st.cache_data(ttl=300)
 def get_pool_tick_spacing(pool_id: str) -> int:
     cfg = load_config()
@@ -933,7 +996,7 @@ else:
     label_to_id = {label: pid for (pid, label) in pools}
     sel_addr = label_to_id[sel_label]
 
-    tab_latest, tab_history, tab_price, tab_models = st.tabs(["Latest", "Snapshots", "Price", "Models"])
+    tab_latest, tab_history, tab_price, tab_models, tab_model_test = st.tabs(["Latest", "Snapshots", "Price", "Models", "Model Test"])
 
     with tab_latest:
         meta = load_latest_meta(sel_addr) or {}
@@ -1098,4 +1161,29 @@ else:
                 })
             if not hist_props.empty:
                 st.write({"historical_proposals": int(len(hist_props))})
-                st.dataframe(hist_props) 
+                st.dataframe(hist_props)
+
+    with tab_model_test:
+        st.caption("Model Test: overlay external proposals from data/json/testmodel/<pool>/ on the price chart")
+        max_snaps = st.slider("Snapshots to include (test)", min_value=10, max_value=5000, value=500, step=10)
+        df_series, df_gaps = build_price_series_df(sel_addr, max_snaps=max_snaps)
+        # y-axis title
+        try:
+            pair = sel_label.split(" ")[0]
+            sym0, sym1 = pair.split("/")
+            y_title = f"Price {sym1}/{sym0}"
+        except Exception:
+            y_title = "Price token1/token0"
+        d0, d1, _, _ = get_pool_metadata(sel_addr)
+        ext_bands, ext_props = load_external_testmodel_bands(sel_addr, df_series, d0=d0, d1=d1)
+        latest_meta = load_latest_meta(sel_addr) or {}
+        hover_extra = {
+            "tvl_usd": latest_meta.get("tvl_usd"),
+            "volume24h_usd": latest_meta.get("volume24h_usd"),
+        }
+        render_price_series_plotly(df_series, df_gaps, y_title=y_title, bands=ext_bands, hover_extra=hover_extra)
+        if ext_props.empty:
+            st.info("No external proposals found under data/json/testmodel/<pool>/.")
+        else:
+            st.write({"external_proposals": int(len(ext_props))})
+            st.dataframe(ext_props) 

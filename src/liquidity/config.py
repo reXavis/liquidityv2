@@ -19,6 +19,11 @@ class AppConfig:
     max_ticks: int
     alpha: float
     model_pools_whitelist: List[str]
+    # Chain / contract config
+    chain_name: str
+    rpc_url: str
+    position_manager_address: str
+    position_manager_abi_path: str
 
 
 def _get_env_int(name: str, default: int) -> int:
@@ -59,6 +64,12 @@ def load_config() -> AppConfig:
     alpha = 0.6
     model_pools_whitelist: List[str] = ['0xd391259888fe4599e8011eea5e27b93a9dc74920']  # add pool IDs here to restrict the model runner
 
+    # Chain / contract config
+    chain_name = "HyperEVM"
+    rpc_url = os.getenv("RPC_URL", "")
+    position_manager_address = "0x69D57B9D705eaD73a5d2f2476C30c55bD755cc2F"
+    position_manager_abi_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "abi", "position_manager.json"))
+
     os.makedirs(data_dir, exist_ok=True)
 
     return AppConfig(
@@ -75,4 +86,8 @@ def load_config() -> AppConfig:
         max_ticks=max_ticks,
         alpha=alpha,
         model_pools_whitelist=model_pools_whitelist,
+        chain_name=chain_name,
+        rpc_url=rpc_url,
+        position_manager_address=position_manager_address,
+        position_manager_abi_path=position_manager_abi_path,
     ) 
