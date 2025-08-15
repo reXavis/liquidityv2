@@ -59,7 +59,7 @@ def load_config() -> AppConfig:
     # Adjustable model parameters (hardcoded defaults)
     t_hours = 6
     lookback_periods = 72
-    z_score = 1.75
+    z_score = 2.5
     k_vol_to_tvl = 0.6
     min_ticks = 50
     max_ticks = 2000
