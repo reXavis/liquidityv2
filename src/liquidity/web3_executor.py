@@ -214,11 +214,12 @@ def main():
 							# Decrease full liquidity if present
 							if liquidity > 0:
 								liq_full = int(liquidity)
+								min_out = int(float(cfg.slippage) * 0.5 * float(liquidity))
 								dec_params = (
 									int(token_id),
 									int(liq_full),
-									0,
-									0,
+									int(min_out),
+									int(min_out),
 									int((datetime.utcnow() + timedelta(minutes=30)).timestamp()),
 								)
 								try:
