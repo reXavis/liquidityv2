@@ -82,3 +82,33 @@ PYTHONPATH=/home/xavi/code/liquidityv2/src python -m liquidity.model_runner
 - Whitelist support: set `model_pools_whitelist = ["<pool_id>", ...]` in `src/liquidity/config.py` to restrict which pools are processed. Otherwise, all discovered pools in `data/json/` are considered.
 
 Tip: Run the ingestor and the model runner concurrently so snapshots and latest pointers stay fresh for the model. 
+
+## End-to-end flow (Ingestor → Model Runner → Web3 Executor)
+
+1) Ingestor runs continuously and writes JSON under `data/json/<pool>/`.
+2) Every 2 hours, the Model Runner computes a proposal per whitelisted pool and writes:
+   - `data/json/model/<pool>/proposal_YYYYMMDDTHHMMSSZ.json`
+3) The Web3 Executor watches `data/json/model/` and, on each new proposal:
+   - If the signer already owns positions for that pool (matched by `deployer` and `token0/token1`), it:
+     - Calls `collect(tokenId, recipient=signer, amount0Max=UINT128_MAX, amount1Max=UINT128_MAX)`
+     - Calls `decreaseLiquidity(tokenId, liquidity=full, amount0Min=0, amount1Min=0, deadline=now+30m)`
+   - Then calls `mint` with params derived from the proposal and `src/liquidity/config.py`:
+     - `amount0Desired = playerliquidity × amounts_per_unit_L.token0`
+     - `amount1Desired = playerliquidity × amounts_per_unit_L.token1`
+     - `amount0Min = slippage × amount0Desired`; `amount1Min = slippage × amount1Desired`
+     - `tickLower/tickUpper` from proposal; `recipient = signer`; `deadline = now+30m`
+   - `token0`, `token1` are read from the pool contract; `deployer` is read from the position manager.
+
+### Web3 Executor (on-chain execution)
+
+```bash
+PYTHONPATH=/home/xavi/code/liquidityv2/src python -m liquidity.web3_executor
+```
+
+- Requires:
+  - `PRIVATE_KEY` env var (used for signing). Recipient is the signer address derived from this key.
+  - `src/liquidity/config.py`: `rpc_url` (default HyperEVM), `position_manager_address`, `position_manager_abi_path`, `playerliquidity`, `slippage`, `model_pools_whitelist`.
+- Behavior:
+  - Watches `data/json/model/<pool>/` for the latest `proposal_*.json` and executes per the flow above.
+  - Auto-discovers `deployer` via `poolDeployer()` on the position manager, and `token0/token1` via the pool contract.
+  - Submits EIP-1559 txs (example gas settings included; adjust as needed). 
