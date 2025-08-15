@@ -169,26 +169,6 @@ def compute_model_effective_ticks(pool_id: str, df_series: pd.DataFrame, t_hours
 	}
 
 
-def compute_amounts_per_unit_liquidity(current_tick: int, lower_tick: int, upper_tick: int) -> Tuple[float, float]:
-    # Uniswap V3 formulas per unit L using dimensionless sqrt prices (no decimals)
-    pa = float((1.0001) ** (float(lower_tick) / 2.0))
-    pb = float((1.0001) ** (float(upper_tick) / 2.0))
-    p = float((1.0001) ** (float(current_tick) / 2.0))
-    if pa > pb:
-        pa, pb = pb, pa
-    # Piecewise amounts per unit L
-    if p <= pa:
-        amount0 = (pb - pa) / (pa * pb)
-        amount1 = 0.0
-    elif p >= pb:
-        amount0 = 0.0
-        amount1 = (pb - pa)
-    else:
-        amount0 = (pb - p) / (p * pb)
-        amount1 = (p - pa)
-    return float(amount0), float(amount1)
-
-
 def save_proposal(pool_id: str, payload: Dict[str, Any]):
 	out_dir = os.path.join(MODEL_DIR, pool_id)
 	os.makedirs(out_dir, exist_ok=True)
@@ -251,21 +231,18 @@ def run_once_for_pool(pool_id: str, cfg) -> None:
 	aligned_half = int(math.ceil(max(0, eff) / max(1, tick_spacing)) * max(1, tick_spacing))
 	lower_tick = int(math.floor((current_tick - aligned_half) / tick_spacing) * tick_spacing)
 	upper_tick = int(math.ceil((current_tick + aligned_half) / tick_spacing) * tick_spacing)
-	# Compute Uniswap per‑L amounts (dimensionless raw token units) and convert to notional weights at raw price
-	a0, a1 = compute_amounts_per_unit_liquidity(current_tick, lower_tick, upper_tick)
 	# Prices
 	scale10 = float(10 ** (int(d0) - int(d1)))
 	lower_price = float((1.0001 ** float(lower_tick)) * scale10)
 	upper_price = float((1.0001 ** float(upper_tick)) * scale10)
 	center_price = float((1.0001 ** float(current_tick)) * scale10)
-	# Weight calculation should use raw price (without decimal scaling): P_raw = (1.0001**tick)
-	p_raw = float((1.0001) ** float(current_tick))
-	# Notionals in token1_raw units: token0_raw * P_raw vs token1_raw
-	notional0 = float(a0) * p_raw
-	notional1 = float(a1)
-	total_notional = max(1e-18, notional0 + notional1)
-	w0 = float(notional0 / total_notional)
-	w1 = float(notional1 / total_notional)
+	# Simple allocation weights: inside → 0.5/0.5; below → 1/0; above → 0/1
+	if current_tick <= lower_tick:
+		w0, w1 = 1.0, 0.0
+	elif current_tick >= upper_tick:
+		w0, w1 = 0.0, 1.0
+	else:
+		w0, w1 = 0.5, 0.5
 	payload = {
 		"snapped_at": datetime.utcnow().isoformat() + "Z",
 		"pool_id": pool_id,
