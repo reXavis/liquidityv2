@@ -312,7 +312,8 @@ def render_tick_distribution_plotly(
             name="Distribution",
             fill="tozeroy",
             line_shape="hv",
-            hovertemplate="Price=%{x}<br>Active=%{y}<extra></extra>",
+            customdata=df_plot["tick_index"].to_numpy(),
+            hovertemplate="Price=%{x}<br>Tick=%{customdata}<br>Active=%{y}<extra></extra>",
         )
     )
     # KDE overlay computed on ticks, mapped to price grid

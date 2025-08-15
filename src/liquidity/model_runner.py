@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from .config import load_config
+from .graphql_client import GraphQLClient
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 # These will be set in main() from cfg.data_dir to ensure alignment with the ingestor
@@ -168,27 +169,24 @@ def compute_model_effective_ticks(pool_id: str, df_series: pd.DataFrame, t_hours
 	}
 
 
-def compute_amounts_per_unit_liquidity(current_tick: int, lower_tick: int, upper_tick: int, d0: int, d1: int) -> Tuple[float, float]:
-	# Convert ticks to human sqrt prices
-	scale10 = float(10 ** (int(d0) - int(d1)))
-	pa = math.sqrt((1.0001 ** float(lower_tick)) * scale10)
-	pb = math.sqrt((1.0001 ** float(upper_tick)) * scale10)
-	p = math.sqrt((1.0001 ** float(current_tick)) * scale10)
-	# Ensure ordering
-	if pa > pb:
-		pa, pb = pb, pa
-	if p <= pa:
-		# entirely token0
-		amount0_per_L = (pb - pa) / (pa * pb)
-		amount1_per_L = 0.0
-	elif p >= pb:
-		# entirely token1
-		amount0_per_L = 0.0
-		amount1_per_L = (pb - pa)
-	else:
-		amount0_per_L = (pb - p) / (p * pb)
-		amount1_per_L = (p - pa)
-	return float(amount0_per_L), float(amount1_per_L)
+def compute_amounts_per_unit_liquidity(current_tick: int, lower_tick: int, upper_tick: int) -> Tuple[float, float]:
+    # Uniswap V3 formulas per unit L using dimensionless sqrt prices (no decimals)
+    pa = float((1.0001) ** (float(lower_tick) / 2.0))
+    pb = float((1.0001) ** (float(upper_tick) / 2.0))
+    p = float((1.0001) ** (float(current_tick) / 2.0))
+    if pa > pb:
+        pa, pb = pb, pa
+    # Piecewise amounts per unit L
+    if p <= pa:
+        amount0 = (pb - pa) / (pa * pb)
+        amount1 = 0.0
+    elif p >= pb:
+        amount0 = 0.0
+        amount1 = (pb - pa)
+    else:
+        amount0 = (pb - p) / (p * pb)
+        amount1 = (p - pa)
+    return float(amount0), float(amount1)
 
 
 def save_proposal(pool_id: str, payload: Dict[str, Any]):
@@ -212,11 +210,20 @@ def run_once_for_pool(pool_id: str, cfg) -> None:
 			print(f"[{pool_id}] No current_tick in latest.json; skipping")
 		return
 	current_tick = int(current_tick)
-	# decimals: attempt to read from latest.json schema variants
-	t0 = latest.get("token0") or {}
-	t1 = latest.get("token1") or {}
-	d0 = int(t0.get("decimals") or latest.get("dec0") or 18)
-	d1 = int(t1.get("decimals") or latest.get("dec1") or 18)
+	# decimals: fetch from subgraph to ensure correctness
+	try:
+		client = GraphQLClient(cfg.subgraph_url, request_rps=cfg.request_rps)
+		state, _ = client.fetch_pool_state(pool_id)
+		t0 = state.get("token0", {}) if state else {}
+		t1 = state.get("token1", {}) if state else {}
+		d0 = int(t0.get("decimals") or 18)
+		d1 = int(t1.get("decimals") or 18)
+	except Exception:
+		# fallback to latest.json if present
+		t0j = latest.get("token0") or {}
+		t1j = latest.get("token1") or {}
+		d0 = int(t0j.get("decimals") or latest.get("dec0") or 18)
+		d1 = int(t1j.get("decimals") or latest.get("dec1") or 18)
 	# Build price series (use a reasonable cap)
 	df_series = build_price_series_df(pool_id, max_snaps=max(500, int(cfg.lookback_periods)))
 	if df_series.empty or len(df_series) < 3:
@@ -244,13 +251,21 @@ def run_once_for_pool(pool_id: str, cfg) -> None:
 	aligned_half = int(math.ceil(max(0, eff) / max(1, tick_spacing)) * max(1, tick_spacing))
 	lower_tick = int(math.floor((current_tick - aligned_half) / tick_spacing) * tick_spacing)
 	upper_tick = int(math.ceil((current_tick + aligned_half) / tick_spacing) * tick_spacing)
-	# Amounts per unit L
-	amount0_per_L, amount1_per_L = compute_amounts_per_unit_liquidity(current_tick, lower_tick, upper_tick, d0, d1)
+	# Compute Uniswap per‑L amounts (dimensionless raw token units) and convert to notional weights at raw price
+	a0, a1 = compute_amounts_per_unit_liquidity(current_tick, lower_tick, upper_tick)
 	# Prices
 	scale10 = float(10 ** (int(d0) - int(d1)))
 	lower_price = float((1.0001 ** float(lower_tick)) * scale10)
 	upper_price = float((1.0001 ** float(upper_tick)) * scale10)
 	center_price = float((1.0001 ** float(current_tick)) * scale10)
+	# Weight calculation should use raw price (without decimal scaling): P_raw = (1.0001**tick)
+	p_raw = float((1.0001) ** float(current_tick))
+	# Notionals in token1_raw units: token0_raw * P_raw vs token1_raw
+	notional0 = float(a0) * p_raw
+	notional1 = float(a1)
+	total_notional = max(1e-18, notional0 + notional1)
+	w0 = float(notional0 / total_notional)
+	w1 = float(notional1 / total_notional)
 	payload = {
 		"snapped_at": datetime.utcnow().isoformat() + "Z",
 		"pool_id": pool_id,
@@ -273,7 +288,7 @@ def run_once_for_pool(pool_id: str, cfg) -> None:
 			"effective_ticks": eff,
 			"half_width_aligned": aligned_half,
 		},
-		"amounts_per_unit_L": {"token0": amount0_per_L, "token1": amount1_per_L},
+		"amounts_per_unit_L": {"token0": w0, "token1": w1},
 	}
 	save_proposal(pool_id, payload)
 
