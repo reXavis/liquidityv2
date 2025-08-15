@@ -25,6 +25,7 @@ class AppConfig:
     position_manager_address: str
     position_manager_abi_path: str
     playerliquidity: float
+    slippage: float
 
 
 def _get_env_int(name: str, default: int) -> int:
@@ -71,6 +72,7 @@ def load_config() -> AppConfig:
     position_manager_address = "0x69D57B9D705eaD73a5d2f2476C30c55bD755cc2F"
     position_manager_abi_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "abi", "position_manager.json"))
     playerliquidity = 0.0
+    slippage = 0.05
 
     os.makedirs(data_dir, exist_ok=True)
 
@@ -93,4 +95,5 @@ def load_config() -> AppConfig:
         position_manager_address=position_manager_address,
         position_manager_abi_path=position_manager_abi_path,
         playerliquidity=playerliquidity,
+        slippage=slippage,
     ) 
