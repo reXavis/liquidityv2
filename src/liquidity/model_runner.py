@@ -238,11 +238,14 @@ def run_once_for_pool(pool_id: str, cfg) -> None:
 	center_price = float((1.0001 ** float(current_tick)) * scale10)
 	# Simple allocation weights: inside → 0.5/0.5; below → 1/0; above → 0/1
 	if current_tick <= lower_tick:
-		w0, w1 = 1.0, 0.0
+		coef0_units_per_usd = 1.0 / max(1e-18, center_price)
+		coef1_units_per_usd = 0.0
 	elif current_tick >= upper_tick:
-		w0, w1 = 0.0, 1.0
+		coef0_units_per_usd = 0.0
+		coef1_units_per_usd = 1.0
 	else:
-		w0, w1 = 0.5, 0.5
+		coef0_units_per_usd = 0.5 / max(1e-18, center_price)
+		coef1_units_per_usd = 0.5
 	payload = {
 		"snapped_at": datetime.utcnow().isoformat() + "Z",
 		"pool_id": pool_id,
@@ -265,7 +268,7 @@ def run_once_for_pool(pool_id: str, cfg) -> None:
 			"effective_ticks": eff,
 			"half_width_aligned": aligned_half,
 		},
-		"amounts_per_unit_L": {"token0": w0, "token1": w1},
+		"amounts_per_unit_L": {"token0": coef0_units_per_usd, "token1": coef1_units_per_usd},
 	}
 	save_proposal(pool_id, payload)
 
