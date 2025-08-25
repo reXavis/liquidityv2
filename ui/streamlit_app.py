@@ -24,6 +24,7 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 st.set_page_config(page_title="Liquidity Distributions", layout="wide")
 st.title("Liquidity Distributions — Algebra Integral (JSON)")
+st.caption("Note: On-chain execution via a Web3 executor has been removed from this repository.")
 
 @st.cache_data(ttl=120)
 def list_pools_with_labels() -> List[Tuple[str, str]]:
@@ -102,7 +103,7 @@ def list_snapshots(pool_id: str) -> pd.DataFrame:
         except Exception:
             continue
     df = pd.DataFrame(rows, columns=["snapshot_id", "snapped_at", "block_number", "is_full", "tvl_usd", "volume24h_usd"]).sort_values(by=["snapped_at", "block_number"], ascending=False)
-    return df.head(200)
+    return df  # Removed .head(200) to show all snapshots
 
 @st.cache_data(ttl=30)
 def load_snapshot(pool_id: str, snapshot_id: str) -> pd.DataFrame:
@@ -444,7 +445,7 @@ def render_distribution_summary_plotly(
 
 
 @st.cache_data(ttl=30)
-def build_price_series_df(pool_id: str, max_snaps: int = 200) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def build_price_series_df(pool_id: str, max_snaps: int = 1000) -> Tuple[pd.DataFrame, pd.DataFrame]:
     snaps = list_snapshots(pool_id)
     if snaps.empty:
         return pd.DataFrame(columns=["snapped_at", "price", "tvl_usd", "volume24h_usd"]), pd.DataFrame(columns=["start", "end"])
@@ -1056,7 +1057,7 @@ else:
 
     with tab_price:
         st.caption("Price over time; shaded regions indicate missing data intervals")
-        max_snaps = st.slider("Snapshots to include", min_value=10, max_value=5000, value=200, step=10)
+        max_snaps = st.slider("Snapshots to include", min_value=10, max_value=5000, value=1000, step=10)
         df_series, df_gaps = build_price_series_df(sel_addr, max_snaps=max_snaps)
         # Derive axis label from selector label
         try:
@@ -1103,7 +1104,7 @@ else:
     with tab_models:
         st.caption("Models: volatility-adaptive sizing prototype; shaded regions indicate missing data intervals")
         # Same price chart configuration as the Price tab (with proposed band overlay)
-        max_snaps = st.slider("Snapshots to include (models)", min_value=10, max_value=5000, value=200, step=10)
+        max_snaps = st.slider("Snapshots to include (models)", min_value=10, max_value=5000, value=1000, step=10)
         df_series, df_gaps = build_price_series_df(sel_addr, max_snaps=max_snaps)
         try:
             pair = sel_label.split(" ")[0]
@@ -1166,7 +1167,7 @@ else:
 
     with tab_model_test:
         st.caption("Model Test: overlay external proposals from data/json/testmodel/<pool>/ on the price chart")
-        max_snaps = st.slider("Snapshots to include (test)", min_value=10, max_value=5000, value=500, step=10)
+        max_snaps = st.slider("Snapshots to include (test)", min_value=10, max_value=5000, value=2000, step=10)
         df_series, df_gaps = build_price_series_df(sel_addr, max_snaps=max_snaps)
         # y-axis title
         try:

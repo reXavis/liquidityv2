@@ -112,25 +112,6 @@ def build_price_series_df(pool_id: str, max_snaps: int) -> pd.DataFrame:
 	return df
 
 
-def infer_tick_spacing_from_distribution(pool_id: str) -> int:
-	# Infer from latest distribution diffs
-	fp = os.path.join(DATA_DIR, pool_id, "latest.json")
-	try:
-		with open(fp, "r") as f:
-			data = json.load(f)
-		active = data.get("active", [])
-		ticks = sorted(set([int(a[0]) for a in active if isinstance(a, list) and len(a) >= 2]))
-		if len(ticks) < 2:
-			return 1
-		diffs = [abs(ticks[i] - ticks[i - 1]) for i in range(1, len(ticks))]
-		g = diffs[0]
-		for d in diffs[1:]:
-			g = math.gcd(g, d)
-		return max(1, int(g))
-	except Exception:
-		return 1
-
-
 def compute_model_effective_ticks(pool_id: str, df_series: pd.DataFrame, t_hours: float, lookback_periods: int, z_score: float, k_vol_to_tvl: float, min_ticks: int, max_ticks: int, alpha: float) -> Dict[str, Any]:
 	# Fixed cadence: 5-minute snapshots
 	ppy = (365.0 * 24.0 * 60.0) / 5.0
@@ -198,12 +179,14 @@ def run_once_for_pool(pool_id: str, cfg) -> None:
 		t1 = state.get("token1", {}) if state else {}
 		d0 = int(t0.get("decimals") or 18)
 		d1 = int(t1.get("decimals") or 18)
+		tick_spacing = int(state.get("tickSpacing") or 1)
 	except Exception:
 		# fallback to latest.json if present
 		t0j = latest.get("token0") or {}
 		t1j = latest.get("token1") or {}
 		d0 = int(t0j.get("decimals") or latest.get("dec0") or 18)
 		d1 = int(t1j.get("decimals") or latest.get("dec1") or 18)
+		tick_spacing = 1
 	# Build price series (use a reasonable cap)
 	df_series = build_price_series_df(pool_id, max_snaps=max(500, int(cfg.lookback_periods)))
 	if df_series.empty or len(df_series) < 3:
@@ -227,7 +210,6 @@ def run_once_for_pool(pool_id: str, cfg) -> None:
 		return
 	eff = int(m["effective_ticks"])
 	# Align to inferred tick spacing
-	tick_spacing = infer_tick_spacing_from_distribution(pool_id)
 	aligned_half = int(math.ceil(max(0, eff) / max(1, tick_spacing)) * max(1, tick_spacing))
 	lower_tick = int(math.floor((current_tick - aligned_half) / tick_spacing) * tick_spacing)
 	upper_tick = int(math.ceil((current_tick + aligned_half) / tick_spacing) * tick_spacing)
