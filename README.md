@@ -6,17 +6,17 @@
 
 ## Install
 ```bash
-cd /home/xavi/code/liquidityv2
+git clone https://github.com/<your-org>/liquidityv2.git
+cd liquidityv2
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -U pip
-# Use binary wheels to avoid slow builds on py3.13
-pip install --only-binary=:all: -r /home/xavi/code/liquidityv2/requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Ingestor (auto-discovers pools; writes JSON under `data/json`)
 ```bash
-PYTHONPATH=/home/xavi/code/liquidityv2/src python -m liquidity.main
+PYTHONPATH=./src python -m liquidity.main
 ```
 - Source: Goldsky Algebra Integral subgraph (hardcoded in `liquidity/config.py`).
 - Storage: flat JSON files per pool under `data/json/<pool>/`.
@@ -25,8 +25,8 @@ PYTHONPATH=/home/xavi/code/liquidityv2/src python -m liquidity.main
 
 ## UI (Streamlit + Plotly)
 ```bash
-. /home/xavi/code/liquidityv2/.venv/bin/activate
-streamlit run /home/xavi/code/liquidityv2/ui/streamlit_app.py
+. ./.venv/bin/activate
+streamlit run ui/streamlit_app.py
 ```
 - Select a pool (shown as `TOKEN0/TOKEN1`).
 - Reads JSON files directly; no DB required.
@@ -63,14 +63,13 @@ streamlit run /home/xavi/code/liquidityv2/ui/streamlit_app.py
 - If the UI shows “No pools ingested yet”, ensure the ingestor is running and JSON files appear under `data/json/`.
 
 ## Troubleshooting
-- Slow `pip install` on Python 3.13: use the `--only-binary=:all:` flag as above. `pandas==2.3.1` is pinned for Py3.13 wheels.
-- Import errors when running the ingestor: ensure `PYTHONPATH=/home/xavi/code/liquidityv2/src` is set as shown.
+- Import errors when running the ingestor: ensure `PYTHONPATH=./src` is set as shown.
 - GraphQL schema errors: the ingestor targets Algebra Integral pools; ensure the Goldsky subgraph is reachable from your network. 
 
 ## Model Runner (continuous proposals every 2 hours)
 
 ```bash
-PYTHONPATH=/home/xavi/code/liquidityv2/src python -m liquidity.model_runner
+PYTHONPATH=./src python -m liquidity.model_runner
 ```
 
 - Reads pool JSON under `data/json/<pool>/` (written by the ingestor), builds the same price series as the UI, and computes the model.

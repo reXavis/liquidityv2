@@ -1144,8 +1144,7 @@ else:
             "tvl_usd": latest_meta.get("tvl_usd"),
             "volume24h_usd": latest_meta.get("volume24h_usd"),
         }
-        static_band = (lower_price, upper_price) if (lower_price is not None and upper_price is not None) else None
-        render_price_series_plotly(df_series, df_gaps, y_title=y_title, bands=hist_bands, hover_extra=hover_extra, static_band=static_band)
+        render_price_series_plotly(df_series, df_gaps, y_title=y_title, bands=hist_bands, hover_extra=hover_extra, static_band=None)
 
         # Diagnostics
         with st.expander("Model outputs"):
