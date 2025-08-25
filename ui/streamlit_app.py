@@ -24,7 +24,6 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 st.set_page_config(page_title="Liquidity Distributions", layout="wide")
 st.title("Liquidity Distributions — Algebra Integral (JSON)")
-st.caption("Note: On-chain execution via a Web3 executor has been removed from this repository.")
 
 @st.cache_data(ttl=120)
 def list_pools_with_labels() -> List[Tuple[str, str]]:
