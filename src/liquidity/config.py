@@ -19,7 +19,13 @@ class AppConfig:
     max_ticks: int
     alpha: float
     model_pools_whitelist: List[str]
-    # On-chain execution removed; keep model-only settings
+    # Chain / contract config
+    chain_name: str
+    rpc_url: str
+    position_manager_address: str
+    position_manager_abi_path: str
+    playerliquidity: float
+    slippage: float
 
 
 def _get_env_int(name: str, default: int) -> int:
@@ -60,7 +66,13 @@ def load_config() -> AppConfig:
     alpha = 0.6
     model_pools_whitelist: List[str] = ['0xd391259888fe4599e8011eea5e27b93a9dc74920']  # add pool IDs here to restrict the model runner
 
-    # Chain-related fields removed
+    # Chain / contract config
+    chain_name = "HyperEVM"
+    rpc_url = "https://hyperliquid.drpc.org"
+    position_manager_address = "0x69D57B9D705eaD73a5d2f2476C30c55bD755cc2F"
+    position_manager_abi_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "abi", "position_manager.json"))
+    playerliquidity = 0.0
+    slippage = 0.05
 
     os.makedirs(data_dir, exist_ok=True)
 
@@ -78,4 +90,10 @@ def load_config() -> AppConfig:
         max_ticks=max_ticks,
         alpha=alpha,
         model_pools_whitelist=model_pools_whitelist,
+        chain_name=chain_name,
+        rpc_url=rpc_url,
+        position_manager_address=position_manager_address,
+        position_manager_abi_path=position_manager_abi_path,
+        playerliquidity=playerliquidity,
+        slippage=slippage,
     ) 
