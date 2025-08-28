@@ -1,12 +1,11 @@
-# LiquidityV2 — JSON ingestion + Plotly UI
+# LiquidityV2 — ALM
 
 ## Prerequisites
 - Python 3.13+
-- Linux/macOS shell
 
 ## Install
 ```bash
-git clone https://github.com/<your-org>/liquidityv2.git
+git clone https://github.com/reXavis/liquidityv2.git
 cd liquidityv2
 python3 -m venv .venv
 . .venv/bin/activate
